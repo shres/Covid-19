@@ -1,0 +1,189 @@
+---
+title: "COVID -19 Overview"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+```{r load-packages, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(knitr)
+```
+
+
+####Loading the COVID-19 data provided by John Hopkins University in GitHub
+```{r}
+
+cases<-read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv",
+                encoding = "UTF-8", check.names = FALSE)
+
+head(cases)
+
+```
+
+
+We are using map_data function to get the "world" data to plot our cases data over it.
+```{r}
+#Loading World Map
+world <- map_data("world")
+
+#mybreaks created to use in map
+mybreaks <- c(100, 500, 1000, 5000, 10000, 50000, 100000, 200000, 300000)
+
+
+```
+
+
+```{r,warning=FALSE, fig.width=10}
+#Plotting the Global total cases
+
+ggplot() +
+  geom_polygon(data = world, aes(x=long, y = lat, group = group), fill="grey", alpha=0.3) +
+  geom_point(data=cases, aes(x=Long, y=Lat, size=`4/5/20`, color=`4/5/20`),stroke=F, alpha=0.7) +
+  scale_size_continuous(name="Cases", range=c(1,7),breaks=mybreaks, labels = c("1-499", "500-999", "1000-4999", "5,000-9,999","10,000-49,999", "50,000-99,999","100,000-199,999", "200,000-299,999", "300,000+")) +
+  scale_color_viridis_c(option="inferno",name="Cases",breaks=mybreaks, labels = c("1-499", "500-999", "1000-4999", "5,000-9,999","10,000-49,999", "50,000-99,999","100,000-199,999", "200,000-299,999", "300,000+")) +
+  theme_void() + 
+  guides( colour = guide_legend()) +
+  labs(caption = "Data Repository provided by Johns Hopkins CSSE. Visualization by DataScience+ ") +
+  theme(
+    legend.position = "bottom",
+    text = element_text(color = "#22211d"),
+    plot.background = element_rect(fill = "#ffffff", color = NA), 
+    panel.background = element_rect(fill = "#ffffff", color = NA), 
+    legend.background = element_rect(fill = "#ffffff", color = NA)
+  )
+```
+
+
+###Confirmed Cases Globally
+```{r}
+
+gc<-read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/04-21-2020.csv")
+
+summary(gc)
+
+gc_summ<- gc %>% group_by(Country_Region) %>% 
+                  summarise(Total.Confirmed=sum(Confirmed), Total.Deaths=sum(Deaths),
+                            Total.Recovered=sum(Recovered)) %>%
+                  mutate(recovered_pct=(Total.Recovered/Total.Confirmed)*100,
+                             deaths_pct=(Total.Deaths/Total.Confirmed)*100)%>%
+                  arrange(desc(Total.Confirmed))
+```
+
+
+####Top 20 and Bottom 20 Countries with Total Confirmed Cases
+######(Last Data Updated Date: April 4,2020)
+```{r,message=FALSE}
+(gc_top20 <-gc_summ %>% top_n(20,Total.Confirmed))
+(gc_bottom20 <- gc_summ %>% arrange(Total.Confirmed) %>% head(20))
+
+```
+#####Plotting Top 20 countries with most confirmed cases with the recovery and deaths percent in those countries
+```{r}
+
+gc_top20%>% ggplot(aes(y=Total.Confirmed, x=reorder(Country_Region,Total.Confirmed))) +geom_col()+coord_flip() +
+            ggtitle("Total Confirmed Cases Globally") +
+            xlab("Country") + ylab("Confrimed Numbers")
+
+
+gc_top20 %>% select(Country_Region, recovered_pct,deaths_pct) %>%
+              gather(Cases,Percent,recovered_pct:deaths_pct) %>% 
+              ggplot(aes(y=Percent, x=reorder(Country_Region,Percent), fill=Cases)) +geom_col(position = "dodge") + coord_flip()+
+              ggtitle("Top 20 Countries with Highest Number of Cases") +
+              xlab("Countries ") +
+              ylab("Death/Receovered Percent") +
+              theme(legend.position = "bottom")
+
+gc_top20 %>% ggplot(aes(recovered_pct, deaths_pct,color=Country_Region)) + 
+  geom_point() +
+  theme(legend.position = "bottom")
+
+#gc_top20%>% ggplot(aes(y=recovered_pct, x=Country_Region)) +geom_col()+coord_flip() 
+#gc_top20%>% ggplot(aes(y=deaths_pct, x=Country_Region)) +geom_col()+coord_flip() 
+
+```
+
+
+#####Looking more into US
+```{r}
+library(maps)
+
+us_map<-map_data("state")
+US<-gc %>% filter(Country_Region=="US")
+
+
+US_break <- c(1, 100, 1000, 5000, 10000, 25000, 50000,75000, 100000, 150000)
+
+ggplot() +geom_polygon(data=us_map, aes(x=long, y=lat, group=group),
+                       fill="gray97", color="grey75") + 
+  coord_quickmap() +
+  geom_point(data=filter(US, between(Long_,-130,-65), between(Lat,25,50)),
+             aes(x=Long_, y=Lat, size=Confirmed, color="red"), alpha=0.4) +
+  scale_size_area(breaks=US_break,max_size = 15) +
+  theme(legend.position = "bottom",
+        panel.background = element_rect( color = NA))
+
+```
+
+```{r}
+
+ny_map<-us_map %>% filter(region=="new york")
+
+ny<-US %>% filter(Province_State=="New York")
+
+#counties<- map_data("county")
+#ny_county <- counties %>% filter(region == "new york")
+
+#ggplot() +geom_polygon(data=NY_map, aes(x=long, y=lat, group=group)) + 
+ # coord_quickmap() + geom_polygon(color = "black", fill = "gray") +
+  #theme_void()+
+  #geom_polygon(data=ny_county,aes(x=long,y=lat, group=group), fill=NA, color="white")+
+  #geom_polygon(data = ny, aes(x=Long_, y=Lat,group=FIPS,fill=Confirmed), color = "white") +
+   #    coord_quickmap(xlim=c(-75, -82),ylim=c(36, 46))+
+   #scale_fill_gradient(trans = "log10")
+      
+
+ny_cases<- cases %>% filter(`Province/State`=="New york")
+
+#helpful links
+#https://eriqande.github.io/rep-res-eeb-2017/map-making-in-R.html#maps-package-and-ggplot
+#https://cran.r-project.org/web/packages/usmap/vignettes/mapping.html
+#https://www.kaggle.com/mcnamamj/wisconsin
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
